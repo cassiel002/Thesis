@@ -215,3 +215,84 @@ sns.heatmap(dist_corr_df, annot=True, cmap='coolwarm', center=0.5, fmt=".2f",
             vmin=0, vmax=1)
 plt.title('Distance Correlation Matrix with Industry Labels')
 plt.show()
+
+#PACF for Macroeconomic data
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.graphics.tsaplots import plot_pacf
+
+# Step 1:
+group1_sectors = ['Information Technology']
+group2_sectors = ['Health Care', 'Consumer Discretionary']
+group3_sectors = [sector for sector in aligned_combined_data.columns if sector not in group1_sectors + group2_sectors]
+
+# Step 2:
+group1_prices = aligned_combined_data[group1_sectors].sum(axis=1)
+group2_prices = aligned_combined_data[group2_sectors].sum(axis=1)
+group3_prices = aligned_combined_data[group3_sectors].sum(axis=1)
+
+price_groups = {
+    'Group 1': group1_prices,
+    'Group 2': group2_prices,
+    'Group 3': group3_prices
+}
+
+for group_name, group_prices in price_groups.items():
+    for macro_col in aligned_smoothed_macro_data.columns:
+        plt.figure(figsize=(10, 6))
+
+        
+        combined_series = group_prices.diff().dropna() - aligned_smoothed_macro_data[macro_col].diff().dropna()
+
+      
+        max_lags = min(60, len(combined_series) // 2 - 1)
+
+        
+        plot_pacf(combined_series, lags=max_lags, title=f'PACF - {group_name} vs {macro_col}', zero=False)
+        plt.suptitle(f'PACF Analysis: {group_name} vs {macro_col}', fontsize=16)
+        plt.show()
+
+#PACF for sentimental data
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.graphics.tsaplots import plot_pacf
+merged_data = merged_data.sort_values(by='Date')
+
+
+price_data = merged_data.pivot_table(index='Date', columns='Sector', values='Price')
+sentiment_data = merged_data.pivot_table(index='Date', columns='Sector', values='Sentiment Score')
+pairs_to_analyze = {
+    'Communication Services Social Media': ['Consumer Discretionary','Health Care','Real Estate','Utlities'],
+    'Information Technology Social Media': ['Consumer Staples'],
+    'Utilities Social Media': ['Utilities']
+}
+total_plots = sum(len(sectors) for sectors in pairs_to_analyze.values())
+fig, axes = plt.subplots(total_plots, 1, figsize=(15, 3 * total_plots))
+fig.tight_layout(pad=3.0)
+plot_idx = 0
+for social_media_label, sectors in pairs_to_analyze.items():
+    for sector in sectors:
+      
+        social_media_column = social_media_label.replace(' Social Media', '').strip()
+
+        if social_media_column not in sentiment_data.columns:
+            print(f"Column '{social_media_column}' not found in sentiment data.")
+            continue
+        if sector not in price_data.columns:
+            print(f"Column '{sector}' not found in price data.")
+            continue
+
+        
+        ax = axes[plot_idx]
+        plot_pacf(sentiment_data[social_media_column], ax=ax, title=f'PACF of {social_media_label} vs {sector} Price', lags=20)
+        ax.set_xlabel('Lags')
+        ax.set_ylabel('Partial Autocorrelation')
+        plot_idx += 1
+
+
+if plot_idx < total_plots:
+    for idx in range(plot_idx, total_plots):
+        fig.delaxes(axes[idx])
+
+plt.suptitle('PACF Plots for Selected Strongly Correlated Price and Social Media Sentiment Data by Sector', y=1.02, fontsize=16)
+plt.show()
