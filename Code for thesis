@@ -1,0 +1,217 @@
+#PCC code
+import matplotlib.pyplot as plt
+import seaborn as sns
+correlation_matrix = combined_data.corr()
+plt.figure(figsize=(12, 8))
+sns.heatmap(correlation_matrix, annot=True, cmap='coolwarm', fmt=".2f", linewidths=0.5)
+plt.title('Pearson Correlation Matrix of GICS Industry Indices ')
+plt.show()
+
+# DCC GARCH Code
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from arch import arch_model
+
+
+garch_models = {}
+standardized_residuals = pd.DataFrame()
+
+for column in combined_data.columns:
+   
+    garch = arch_model(combined_data[column].dropna(), vol='Garch', p=1, q=1).fit(disp='off')
+    
+    standardized_residuals[column] = garch.std_resid
+
+
+def dcc_qml(params, std_residuals):
+    T, n = std_residuals.shape
+    alpha, beta = params
+    Q_bar = np.cov(std_residuals, rowvar=False)
+    Q_t = Q_bar.copy()
+    log_likelihood = 0
+
+    for t in range(T):
+        z_t = std_residuals[t].reshape(-1, 1)
+        Q_t = (1 - alpha - beta) * Q_bar + alpha * (z_t @ z_t.T) + beta * Q_t
+        D_t = np.diag(1 / np.sqrt(np.diag(Q_t)))
+        R_t = D_t @ Q_t @ D_t
+
+        log_likelihood += np.log(np.linalg.det(R_t)) + z_t.T @ np.linalg.inv(R_t) @ z_t
+
+    return -log_likelihood[0][0]  
+
+
+initial_params = np.array([0.01, 0.98])
+
+
+constraints = (
+    {'type': 'ineq', 'fun': lambda x: 1 - x[0] - x[1]},
+    {'type': 'ineq', 'fun': lambda x: x[0]},
+    {'type': 'ineq', 'fun': lambda x: x[1]}
+)
+
+
+result = minimize(lambda params: dcc_qml(params, standardized_residuals.values),
+                  initial_params, method='SLSQP', constraints=constraints)
+
+
+alpha_opt, beta_opt = result.x
+print(f"Optimized α: {alpha_opt}, Optimized β: {beta_opt}")
+
+
+def calculate_dcc_with_params(std_residuals, alpha, beta):
+    T, n = std_residuals.shape
+    Q_bar = np.cov(std_residuals, rowvar=False)
+    Q_t = Q_bar.copy()
+    R_t = np.zeros((n, n, T))
+
+    for t in range(T):
+        z_t = std_residuals[t].reshape(-1, 1)
+        Q_t = (1 - alpha - beta) * Q_bar + alpha * (z_t @ z_t.T) + beta * Q_t
+        D_t = np.diag(1 / np.sqrt(np.diag(Q_t)))
+        R_t[:, :, t] = D_t @ Q_t @ D_t
+
+    return R_t
+
+
+dcc_matrix = calculate_dcc_with_params(standardized_residuals.values, alpha_opt, beta_opt)
+
+
+last_dcc_matrix = dcc_matrix[:, :, -1]
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(last_dcc_matrix, annot=True, cmap='coolwarm', center=0.5, fmt=".2f",
+            xticklabels=combined_data.columns,
+            yticklabels=combined_data.columns,
+            vmin=0, vmax=1)
+plt.title('DCC Matrix with Industry Labels (Macro) at Last Time Point')
+plt.show()
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from arch import arch_model
+from scipy.optimize import minimize
+
+
+garch_models = {}
+standardized_residuals = pd.DataFrame()
+
+for column in combined_data.columns:
+    
+    garch = arch_model(combined_data[column].dropna(), vol='Garch', p=1, q=1).fit(disp='off')
+   
+    standardized_residuals[column] = garch.std_resid
+
+
+standardized_residuals.index = pd.to_datetime(standardized_residuals.index)
+
+
+def dcc_qml(params, std_residuals):
+    T, n = std_residuals.shape
+    alpha, beta = params
+    Q_bar = np.cov(std_residuals, rowvar=False)
+    Q_t = Q_bar.copy()
+    log_likelihood = 0
+
+    for t in range(T):
+        z_t = std_residuals[t].reshape(-1, 1)
+        Q_t = (1 - alpha - beta) * Q_bar + alpha * (z_t @ z_t.T) + beta * Q_t
+        D_t = np.diag(1 / np.sqrt(np.diag(Q_t)))
+        R_t = D_t @ Q_t @ D_t
+
+        log_likelihood += np.log(np.linalg.det(R_t)) + z_t.T @ np.linalg.inv(R_t) @ z_t
+
+    return -log_likelihood[0][0]  
+
+
+initial_params = np.array([0.01, 0.98])
+
+
+constraints = (
+    {'type': 'ineq', 'fun': lambda x: 1 - x[0] - x[1]},
+    {'type': 'ineq', 'fun': lambda x: x[0]},
+    {'type': 'ineq', 'fun': lambda x: x[1]}
+)
+
+
+result = minimize(lambda params: dcc_qml(params, standardized_residuals.values),
+                  initial_params, method='SLSQP', constraints=constraints)
+
+
+alpha_opt, beta_opt = result.x
+print(f"Optimized α: {alpha_opt}, Optimized β: {beta_opt}")
+
+
+def calculate_dcc_with_params(std_residuals, alpha, beta):
+    T, n = std_residuals.shape
+    Q_bar = np.cov(std_residuals, rowvar=False)
+    Q_t = Q_bar.copy()
+    R_t = np.zeros((n, n, T))
+
+    for t in range(T):
+        z_t = std_residuals[t].reshape(-1, 1)
+        Q_t = (1 - alpha - beta) * Q_bar + alpha * (z_t @ z_t.T) + beta * Q_t
+        D_t = np.diag(1 / np.sqrt(np.diag(Q_t)))
+        R_t[:, :, t] = D_t @ Q_t @ D_t
+
+    return R_t
+
+
+dcc_matrix = calculate_dcc_with_params(standardized_residuals.values, alpha_opt, beta_opt)
+
+
+index_2020 = standardized_residuals.index.get_indexer([pd.Timestamp('2020-01-01')], method='nearest')[0]
+index_2022 = standardized_residuals.index.get_indexer([pd.Timestamp('2021-07-28')], method='nearest')[0]
+
+dcc_matrix_2020 = dcc_matrix[:, :, index_2020]
+dcc_matrix_2022 = dcc_matrix[:, :, index_2022]
+
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(dcc_matrix_2020, annot=True, cmap='coolwarm', center=0.5, fmt=".2f",
+            xticklabels=combined_data.columns,
+            yticklabels=combined_data.columns,
+            vmin=0, vmax=1)
+plt.title('DCC Matrix with Industry Labels at 2020-01-01')
+plt.show()
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(dcc_matrix_2022, annot=True, cmap='coolwarm', center=0.5, fmt=".2f",
+            xticklabels=combined_data.columns,
+            yticklabels=combined_data.columns,
+            vmin=0, vmax=1)
+plt.title('DCC Matrix with Industry Labels at 2021-07-28')
+plt.show()
+
+# Distance Correlation
+import numpy as np
+import dcor
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+data = combined_data.values  
+columns = combined_data.columns
+
+
+dist_corr_matrix = np.zeros((data.shape[1], data.shape[1]))
+
+for i in range(data.shape[1]):
+    for j in range(data.shape[1]):
+        dist_corr_matrix[i, j] = dcor.distance_correlation(data[:, i], data[:, j])
+
+
+dist_corr_df = pd.DataFrame(dist_corr_matrix, index=columns, columns=columns)
+
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(dist_corr_df, annot=True, cmap='coolwarm', center=0.5, fmt=".2f",
+            xticklabels=columns,
+            yticklabels=columns,
+            vmin=0, vmax=1)
+plt.title('Distance Correlation Matrix with Industry Labels')
+plt.show()
